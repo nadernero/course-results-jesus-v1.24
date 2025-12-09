@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="https://i.postimg.cc/Kj6FWBQN/Whats-App-Image-2025-10-13-at-4-27-05-PM-1.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>نتيجة كورس مجتمع يسوع</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;700&family=Dancing+Script:wght@400;700&family=El+Messiri:wght@400;700&family=Lobster&family=Noto+Naskh+Arabic:wght@400;700&family=Tajawal:wght@400;500;700&display=swap');
+      body {
+        font-family: 'Cairo', sans-serif;
+      }
+      .admin-font {
+        font-family: 'Tajawal', sans-serif;
+      }
+      @keyframes fadeInAndUp {
+        from {
+          opacity: 0;
+          transform: translateY(1rem);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-fade-in-up {
+        animation: fadeInAndUp 0.6s ease-out forwards;
+      }
+
+      @keyframes draw-line {
+        from { stroke-dashoffset: 1000; }
+        to { stroke-dashoffset: 0; }
+      }
+      
+      .animate-draw-line {
+        stroke-dasharray: 1000;
+        stroke-dashoffset: 1000;
+        animation: draw-line 2s ease-out forwards;
+      }
+
+      @keyframes toast-in-left {
+        from {
+          transform: translateX(-100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      
+      /* --- Theme Variables --- */
+      :root, .theme-indigo {
+        --color-primary-rgb: 79 70 229;
+        --color-primary-accent-rgb: 99 102 241;
+        --color-primary-light-rgb: 238 242 255;
+        --color-primary-dark-text-rgb: 99 102 241;
+        --color-primary-light-text-rgb: 129 140 248;
+
+        /* Advanced Style Defaults */
+        --card-bg-light-rgba: rgba(0, 0, 0, 0.1);
+        --card-bg-dark-rgba: rgba(0, 0, 0, 0.2);
+        --card-backdrop-blur: 16px;
+        --card-border-rgba: rgba(255, 255, 255, 0.2);
+        --main-text-color-light: #374151; /* gray-700 */
+        --main-text-color-dark: #e2e8f0; /* slate-200 */
+      }
+      .theme-teal {
+        --color-primary-rgb: 13 148 136;
+        --color-primary-accent-rgb: 20 184 166;
+        --color-primary-light-rgb: 240 252 252;
+        --color-primary-dark-text-rgb: 13 148 136;
+        --color-primary-light-text-rgb: 45 212 191;
+      }
+      .theme-rose {
+        --color-primary-rgb: 225 29 72;
+        --color-primary-accent-rgb: 244 63 94;
+        --color-primary-light-rgb: 255 241 242;
+        --color-primary-dark-text-rgb: 219 39 119;
+        --color-primary-light-text-rgb: 244 63 94;
+      }
+      .theme-purple {
+        --color-primary-rgb: 147 51 234;
+        --color-primary-accent-rgb: 168 85 247;
+        --color-primary-light-rgb: 250 245 255;
+        --color-primary-dark-text-rgb: 147 51 234;
+        --color-primary-light-text-rgb: 192 132 252;
+      }
+      .theme-green {
+        --color-primary-rgb: 22 101 52;
+        --color-primary-accent-rgb: 21 128 61;
+        --color-primary-light-rgb: 240 253 244;
+        --color-primary-dark-text-rgb: 22 101 52;
+        --color-primary-light-text-rgb: 22 163 74;
+      }
+      .theme-amber {
+        --color-primary-rgb: 217 119 6;
+        --color-primary-accent-rgb: 245 158 11;
+        --color-primary-light-rgb: 255 251 235;
+        --color-primary-dark-text-rgb: 217 119 6;
+        --color-primary-light-text-rgb: 251 191 36;
+      }
+      .theme-cyan {
+          --color-primary-rgb: 8 145 178;
+          --color-primary-accent-rgb: 6 182 212;
+          --color-primary-light-rgb: 236 254 255;
+          --color-primary-dark-text-rgb: 8 145 178;
+          --color-primary-light-text-rgb: 34 211 238;
+      }
+      .theme-lime {
+          --color-primary-rgb: 101 163 13;
+          --color-primary-accent-rgb: 132 204 22;
+          --color-primary-light-rgb: 247 254 231;
+          --color-primary-dark-text-rgb: 101 163 13;
+          --color-primary-light-text-rgb: 163 230 53;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.23.0",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "vite": "https://aistudiocdn.com/vite@^7.1.9",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.4",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.4.0/",
+    "fs": "https://aistudiocdn.com/fs@^0.0.1-security",
+    "firebase-admin/": "https://aistudiocdn.com/firebase-admin@^13.5.0/",
+    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+# This file tells Netlify how to build your project and where to find Functions.
+
+[build]
+  # This is your existing build command
+  command = "npm run build"
+  
+  # This is your existing publish directory
+  publish = "dist"
+  
+  # This tells Netlify to look for functions in this folder
+  functions = "netlify/functions"
+
+# This rule is crucial for React Router. 
+# It ensures that refreshing any page (like /admin) works correctly.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
