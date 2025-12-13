@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import type { StudentResult } from './types';
+
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import type { StudentResult, Servant, CourseResult, Evaluation } from './types';
 
 // --- SVG Icons (New & Polished) ---
 const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transform -rotate-45" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>;
@@ -9,6 +10,9 @@ const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-
 
 interface AIChatViewProps {
     students: StudentResult[];
+    servants: Servant[];
+    results: CourseResult[];
+    evaluations: Evaluation[];
 }
 
 interface Message {
@@ -17,7 +21,6 @@ interface Message {
 }
 
 // --- Text Formatter Component ---
-// This component parses the raw text from AI and renders it beautifully
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     if (!text) return null;
     const lines = text.split('\n');
@@ -27,7 +30,7 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
             {lines.map((line, index) => {
                 const trimmedLine = line.trim();
                 
-                // 1. Handle Bullet Points (starts with - or *)
+                // 1. Handle Bullet Points
                 if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ')) {
                     const content = trimmedLine.substring(2);
                     return (
@@ -38,10 +41,11 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
                     );
                 }
                 
-                // 2. Handle Headings (ends with :) or Numbered Lists (1. )
-                if (trimmedLine.endsWith(':') || /^\d+\./.test(trimmedLine)) {
+                // 2. Handle Headings
+                if (trimmedLine.endsWith(':') || /^\d+\./.test(trimmedLine) || trimmedLine.startsWith('#')) {
+                     const cleanLine = trimmedLine.replace(/^#+\s*/, '');
                      return (
-                        <p key={index} className="font-bold text-indigo-700 dark:text-indigo-300 mt-3 mb-1" dangerouslySetInnerHTML={{ __html: parseBold(trimmedLine) }} />
+                        <p key={index} className="font-bold text-indigo-700 dark:text-indigo-300 mt-3 mb-1" dangerouslySetInnerHTML={{ __html: parseBold(cleanLine) }} />
                      );
                 }
                 
@@ -55,17 +59,24 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-// Helper to replace **text** with <strong>text</strong> safely
 const parseBold = (text: string) => {
-    // Basic sanitization
     const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    // Replace **bold** markers with HTML strong tags
     return safeText.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-indigo-900 dark:text-indigo-100">$1</strong>');
 };
 
-export const AIChatView: React.FC<AIChatViewProps> = ({ students }) => {
+// Helper function to normalize Arabic text for better matching
+const normalizeArabic = (text: string) => {
+    return text
+        .replace(/(أ|إ|آ)/g, 'ا')
+        .replace(/(ة)/g, 'ه')
+        .replace(/(ى)/g, 'ي')
+        .trim()
+        .toLowerCase();
+};
+
+export const AIChatView: React.FC<AIChatViewProps> = ({ students, servants, results, evaluations }) => {
     const [messages, setMessages] = useState<Message[]>([
-        { sender: 'ai', text: 'أهلاً بك يا خادم الرب! ✝️\nأنا مساعدك الذكي لتحليل بيانات الخدمة.\n\nيمكنك سؤالي عن:\n- **إحصائيات الحضور والغياب** 📊\n- **أداء الخدام في الكورسات** ⭐\n- **مقارنات بين الخدمات** ⚖️\n\nكيف يمكنني مساعدتك اليوم؟' }
+        { sender: 'ai', text: 'أهلاً بك يا خادم الرب! ✝️\nأنا مساعدك الذكي لتحليل بيانات الخدمة.\n\nيمكنك سؤالي عن خادم محدد بالاسم (مثال: "معلومات عن جورج دانيال")، وسأقوم بجلب سجله الكامل وتحليله، بما في ذلك:\n- **البيانات الشخصية والخدمات**\n- **نتائج الكورسات ونسب الحضور**\n- **تحليل نقاط القوة والضعف**\n- **توصيات للأمين وتنبيهات**\n\nكيف يمكنني مساعدتك اليوم؟' }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -88,29 +99,109 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students }) => {
         setIsLoading(true);
         
         try {
+            // 1. Clean Input: Remove common stop words to find the name
+            // Remove "معلومات عن", "اريد", "تحليل", etc. to isolate the potential name
+            const stopWords = ['اريد', 'معلومات', 'عن', 'الخادم', 'تحليل', 'اداء', 'بيانات', 'نتيجة', 'درجات', 'ابحث', 'هات'];
+            let potentialName = textToSend;
+            stopWords.forEach(word => {
+                potentialName = potentialName.replace(new RegExp(word, 'gi'), '');
+            });
+            potentialName = normalizeArabic(potentialName);
+
+            // 2. Search Logic: Does the servant name include the input?
+            const matchedServants = servants.filter(s => {
+                const normalizedServantName = normalizeArabic(s.name);
+                return normalizedServantName.includes(potentialName) && potentialName.length > 2; // Ensure at least 3 chars
+            });
+            
+            let dataContext = "";
+            let promptInstruction = "";
+
+            if (matchedServants.length > 0) {
+                // --- Specific Servant Context ---
+                // Take the top matches (limit to 2 to avoid token overflow)
+                const selectedServantsData = matchedServants.slice(0, 2).map(servant => {
+                    const servantResults = results.filter(r => String(r.servantCode) === servant.code).sort((a,b) => b.year - a.year);
+                    const servantEvaluations = evaluations.filter(ev => String(ev.servantCode) === servant.code).sort((a,b) => b.year - a.year);
+                    
+                    return {
+                        personalInfo: {
+                            name: servant.name,
+                            code: servant.code,
+                            mobile: servant.mobileNumber,
+                            services: servant.allServices || [servant.primaryService]
+                        },
+                        courses: servantResults.map(r => ({
+                            courseName: r.courseName,
+                            score: r.score,
+                            attendance: r.attendance,
+                            year: r.year
+                        })),
+                        evaluations: servantEvaluations
+                    };
+                });
+
+                dataContext = JSON.stringify(selectedServantsData);
+                promptInstruction = `
+                لقد طلب المستخدم معلومات عن خادم (أو خدام) معينين.
+                البيانات المرفقة تحتوي على الملف الكامل لهم.
+
+                **مهم جداً: قم بتقمص دور "محلل بيانات الخدمة" وقدم تقريراً احترافياً وشاملاً لكل خادم تم العثور عليه، وفق الهيكل التالي:**
+
+                1. **بطاقة تعريف الخادم:**
+                   - الاسم: [الاسم]
+                   - الكود: [الكود] | الموبايل: [رقم الموبايل]
+                   - الخدمات: [قائمة الخدمات]
+
+                2. **سجل الكورسات (تحليل الأداء):**
+                   - اسرد الكورسات التي حضرها مع الدرجة ونسبة الحضور.
+                   - هل درجاته في تحسن أم تراجع؟
+                   - هل نسبة الحضور منتظمة؟
+
+                3. **نقاط القوة والضعف (استنتاج من البيانات):**
+                   - **نقاط القوة:** (مثلاً: درجات مرتفعة، التزام بالحضور، تنوع الكورسات).
+                   - **نقاط الضعف:** (مثلاً: غياب متكرر في كورس معين، درجات منخفضة، انقطاع لفترة).
+
+                4. **التوصيات والملاحظات:**
+                   - **للخادم:** نصيحة محددة للتحسن بناءً على أدائه.
+                   - **للأمين (المسؤول):** تنبيه إذا كان الخادم يحتاج لمتابعة خاصة أو افتقاد بسبب الغياب، أو تشجيع لتكليفه بمسؤوليات أكبر إذا كان متميزاً.
+
+                استخدم الإيموجي وتنسيق النقاط (Bullet Points) لجعل القراءة سهلة وممتعة.
+                `;
+
+            } else {
+                // --- General Context ---
+                // If no specific name found, fall back to general stats or answering the general question
+                const summaryStats = {
+                    totalServants: servants.length,
+                    topCourses: [...new Set(results.map(r => r.courseName))].slice(0, 5),
+                    sampleResults: students.slice(0, 50) // Send a sample
+                };
+                dataContext = JSON.stringify(summaryStats); 
+                promptInstruction = `
+                لم يتم العثور على خادم يطابق الاسم الذي أدخله المستخدم في البحث بدقة.
+                أخبر المستخدم بلطف أنك لم تجد خادماً بهذا الاسم بالتحديد، واقترح عليه التأكد من كتابة الاسم بشكل صحيح أو كتابة الكود.
+                
+                ومع ذلك، إذا كان سؤاله عاماً (عن إحصائيات أو عدد الخدام)، فأجب بناءً على البيانات العامة المرفقة.
+                `;
+            }
+
             const systemInstruction = `
-            أنت مساعد ذكاء اصطناعي خبير ومحلل بيانات، متخصص في خدمة "مجتمع يسوع" في كنيسة القديس بولس بالعبور.
+            أنت "المساعد الذكي" لخدمة مجتمع يسوع في كنيسة القديس بولس بالعبور.
             
-            **مهمتك:** تقديم إجابات دقيقة ومختصرة بناءً على البيانات المقدمة فقط.
-
-            **قواعد التنسيق (مهمة جداً):**
-            1. **استخدم الإيموجي** لتزيين العناوين والنقاط المهمة.
-            2. **استخدم الخط العريض** (بوضع نجمتين ** حول النص) لتمييز الأسماء والأرقام والنتائج.
-            3. **استخدم القوائم** (ابدأ بـ - ) عند سرد أسماء أو نقاط.
-            4. **كن مباشراً:** ادخل في الإجابة فوراً بدون مقدمات طويلة.
-
-            **تعليمات تحليل البيانات:**
-            * البيانات مرفقة بصيغة JSON.
-            * عند السؤال عن "أفضل الخدام"، رتبهم حسب الدرجات (score) ثم الحضور (attendance).
-            * عند السؤال عن "الغياب"، ابحث عن score = "غائب" أو attendance منخفض.
+            البيانات المستخرجة من قاعدة البيانات:
+            ${dataContext}
             
-            البيانات: ${JSON.stringify(students.slice(0, 300))} (تم تقليص البيانات للسرعة)`; // Slicing to avoid token limits if list is huge
+            تعليمات الاستجابة:
+            ${promptInstruction}
             
-            // Using the proxy function directly (same as App.tsx logic)
+            سؤال المستخدم الأصلي: ${userMessage.text}
+            `;
+            
             const response = await fetch('/.netlify/functions/gemini', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contents: `${systemInstruction}\n\nسؤال المستخدم: ${userMessage.text}` }),
+              body: JSON.stringify({ contents: systemInstruction }),
             });
 
             if (!response.ok) throw new Error('Network response was not ok');
@@ -131,10 +222,10 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students }) => {
     };
     
     const suggestedPrompts = [
+        "تحليل شامل للخادم جورج دانيال",
         "من هم أعلى 5 خدام في الدرجات؟ 🏆",
-        "كم عدد الخدام في كل خدمة؟ 📊",
         "أعطني قائمة بالخدام الغائبين ⚠️",
-        "ما هو متوسط الحضور العام؟ 📉",
+        "ما هي التوصيات العامة لتحسين الخدمة؟ 💡",
     ];
 
     return (
@@ -145,8 +236,8 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students }) => {
                     <SparklesIcon />
                 </div>
                 <div>
-                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">المساعد الذكي</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">متاح لتحليل البيانات فورياً</p>
+                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">المساعد الذكي (مُطور)</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">تحليل عميق للنتائج والتقييمات</p>
                 </div>
             </div>
 
@@ -158,7 +249,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students }) => {
                             {msg.sender === 'ai' ? <BotIcon/> : <UserIcon/>}
                         </div>
                         
-                        <div className={`px-5 py-3.5 rounded-2xl max-w-[85%] md:max-w-xl shadow-sm ${
+                        <div className={`px-5 py-3.5 rounded-2xl max-w-[95%] md:max-w-2xl shadow-sm ${
                             msg.sender === 'user' 
                             ? 'bg-indigo-600 text-white rounded-tr-none' 
                             : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-tl-none border border-gray-200 dark:border-slate-700'
@@ -183,6 +274,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students }) => {
                                 <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
                                 <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
                             </div>
+                            <p className="text-xs text-slate-400 mt-2">جاري البحث في السجلات وتحليل البيانات...</p>
                         </div>
                     </div>
                 )}
@@ -213,7 +305,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ students }) => {
                         type="text" 
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="اكتب سؤالك هنا..." 
+                        placeholder="اكتب اسم الخادم للتحليل أو أي سؤال آخر..." 
                         className="w-full pl-4 pr-12 py-3.5 bg-gray-100 dark:bg-slate-900 border-transparent focus:bg-white dark:focus:bg-black focus:border-indigo-500 rounded-xl focus:ring-0 text-slate-800 dark:text-slate-100 placeholder-gray-400 transition-all shadow-inner text-sm"
                         disabled={isLoading}
                     />
