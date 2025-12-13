@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { db } from './firebaseConfig';
 import { read, utils, writeFile } from 'xlsx';
@@ -92,6 +93,11 @@ interface AdminViewProps {
 
 const AdminView: React.FC<AdminViewProps> = ({ onLogout, certificateTexts, setCertificateTexts, setTheme, isDarkMode, setIsDarkMode, customStyles, setCustomStyles, setBackgroundUrl, backgroundUrl, backgroundGallery, setBackgroundGallery }) => {
     const [courseRegistrations, setCourseRegistrations] = useState<StudentResult[]>([]);
+    // New states for full data access in AI Chat
+    const [rawServants, setRawServants] = useState<Servant[]>([]);
+    const [rawResults, setRawResults] = useState<CourseResult[]>([]);
+    const [rawEvaluations, setRawEvaluations] = useState<Evaluation[]>([]);
+
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string>('');
     const [searchTerm, setSearchTerm] = useState<string>('');
@@ -125,20 +131,62 @@ const AdminView: React.FC<AdminViewProps> = ({ onLogout, certificateTexts, setCe
             try {
                 const servantsSnapshot = await db.collection("servants").get();
                 const resultsSnapshot = await db.collection("courseResults").get();
+                const evaluationsSnapshot = await db.collection("evaluations").get();
                 
                 const servantsMap = new Map<string, Servant>();
-                servantsSnapshot.forEach(doc => { const servant = doc.data() as Servant; servant.code = doc.id; servantsMap.set(doc.id, servant); });
+                const servantsList: Servant[] = [];
+                servantsSnapshot.forEach(doc => { 
+                    const servant = { ...doc.data(), code: doc.id } as Servant; 
+                    servantsMap.set(doc.id, servant);
+                    servantsList.push(servant);
+                });
                 
+                const resultsList: CourseResult[] = [];
                 // Group results by servant to de-duplicate per servant
                 const resultsByServant = new Map<string, CourseResult[]>();
                 resultsSnapshot.forEach(doc => {
                     const result = doc.data() as CourseResult;
+                    resultsList.push(result);
                     const servantCode = String(result.servantCode);
                     if (!resultsByServant.has(servantCode)) {
                         resultsByServant.set(servantCode, []);
                     }
                     resultsByServant.get(servantCode)!.push(result);
                 });
+
+                const evaluationsList: Evaluation[] = [];
+                evaluationsSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    // Basic normalization if needed, similar to other components
+                    if (data.scores) {
+                        evaluationsList.push({ id: doc.id, ...data } as Evaluation);
+                    } else {
+                        // Handle old format
+                        const rating = data.rating || 0;
+                        const overallAverage = rating * 20;
+                        evaluationsList.push({
+                            id: doc.id,
+                            servantCode: data.servantCode,
+                            serviceName: data.serviceName,
+                            year: data.year,
+                            evaluatorName: data.evaluatorName,
+                            scores: {
+                                spiritualLife: overallAverage,
+                                commitment: overallAverage,
+                                preparationAndDelivery: overallAverage,
+                                relationshipWithPeers: overallAverage,
+                                relationshipWithCongregation: overallAverage,
+                                personalGrowth: overallAverage,
+                            },
+                            overallAverage,
+                            generalNotes: data.notes
+                        } as Evaluation);
+                    }
+                });
+
+                setRawServants(servantsList);
+                setRawResults(resultsList);
+                setRawEvaluations(evaluationsList);
 
                 const allDeDupedResults: CourseResult[] = [];
                 for (const servantResults of resultsByServant.values()) {
@@ -437,7 +485,7 @@ const AdminView: React.FC<AdminViewProps> = ({ onLogout, certificateTexts, setCe
                         </div>
                     </div>
                 );
-            case 'ai_chat': return <AIChatView students={courseRegistrations} />;
+            case 'ai_chat': return <AIChatView servants={rawServants} results={rawResults} evaluations={rawEvaluations} students={courseRegistrations} />;
             case 'servants_data': return <DataManagementView />;
             case 'courses_data': return <CourseResultsDataView />;
             case 'evaluations_data': return <ExcelImportEvaluationsView />;
