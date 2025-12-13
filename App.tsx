@@ -516,7 +516,13 @@ const App: React.FC = () => {
           });
 
           if (!response.ok) {
-              const errorBody = await response.json();
+              let errorBody;
+              try {
+                  errorBody = await response.json();
+              } catch (e) {
+                  // If JSON parsing fails, use status text
+                  throw new Error(`Server Error: ${response.status} ${response.statusText}`);
+              }
               console.error('Proxy Error:', errorBody);
               throw new Error(errorBody.error || 'Failed to fetch response from proxy.');
           }
