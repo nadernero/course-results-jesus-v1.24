@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo, useEffect, Suspense, lazy } from 'react';
 import { db, auth } from './firebaseConfig';
 // @google/genai-ts: Fix: The 'firebase/firestore' module does not have exported members like 'collection', 'doc', etc. in v8. The code is being updated to use the v8-compatible syntax.
@@ -521,15 +520,17 @@ const App: React.FC = () => {
               try {
                   errorBody = await response.json();
               } catch (e) {
-                  // Fallback if not JSON
+                  // If JSON parsing fails, use status text
                   throw new Error(`Server Error: ${response.status} ${response.statusText}`);
               }
               console.error('Proxy Error:', errorBody);
-              // Use the actual error message from the server if available
-              throw new Error(errorBody.error || `Error ${response.status}: ${response.statusText}`);
+              throw new Error(errorBody.error || 'Failed to fetch response from proxy.');
           }
 
           const data = await response.json();
+          // The Netlify function might return a simplified object { text: "..." }
+          // or the full GenerateContentResponse where the .text getter is lost in serialization.
+          // This handles both cases and also allows for empty strings as a valid response.
           const text = data.text ?? data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
           if (text === undefined || text === null) {
@@ -539,15 +540,10 @@ const App: React.FC = () => {
           return text;
       } catch (err: any) {
           console.error("Error with proxy or Gemini API:", err);
-          
-          let errorMessage = err.message || "حدث خطأ أثناء التواصل مع المساعد الذكي.";
-          
-          // Translate common errors for better UX
-          if (errorMessage.includes("API_KEY")) errorMessage = "خطأ في إعدادات السيرفر: مفتاح API مفقود.";
-          else if (errorMessage.includes("Quota") || errorMessage.includes("429")) errorMessage = "تم تجاوز حد الاستخدام المسموح به حالياً. يرجى المحاولة لاحقاً.";
-          else if (errorMessage.includes("blocked")) errorMessage = "عذراً، لم أتمكن من الإجابة بسبب قيود المحتوى.";
-          else if (errorMessage.includes("Network")) errorMessage = "خطأ في الاتصال بالشبكة. يرجى التحقق من الإنترنت.";
-
+          let errorMessage = "حدث خطأ أثناء التواصل مع المساعد الذكي. يرجى المحاولة مرة أخرى.";
+          if (err.message && err.message.includes("API key not configured")) {
+              errorMessage = "عفواً، خدمة الذكاء الاصطناعي غير متاحة حالياً بسبب مشكلة في الإعدادات. يرجى التواصل مع مسؤول الخدمة.";
+          }
           errorSetter(errorMessage); // عرض الخطأ في الواجهة
           return null;
       }
