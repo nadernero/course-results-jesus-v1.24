@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { FullStudentProfile, CourseResult } from './types';
@@ -132,7 +133,7 @@ const CourseResultCard: React.FC<{
       <div className="grid grid-cols-2 gap-4 items-center my-6">
         {/* Attendance (Right in RTL) */}
         <div className="text-center">
-          <p className="text-slate-200 font-semibold text-base">الحاضر</p>
+          <p className="text-slate-200 font-semibold text-base"> نسبة الحضور</p>
           <p className="text-white font-bold text-3xl mt-1">{attendance}%</p>
           <div className="w-full bg-gray-200/20 rounded-full h-2.5 mt-2">
             <div className={`${bgColor} h-2.5 rounded-full`} style={{ width: `${attendance}%` }}></div>
@@ -181,14 +182,25 @@ const SmartGuideSection: React.FC<Omit<ResultDisplayProps, 'onShowCertificate' |
     if (!profile || !profile.results || profile.results.length === 0) {
         return false;
     }
-    // Find the latest result by sorting by year descending
-    const latestResult = [...profile.results].sort((a, b) => b.year - a.year)[0];
+    
+    // Sort logic to find the absolute latest result based on Date first, then Year.
+    const sortedResults = [...profile.results].sort((a, b) => {
+        // 1. Try comparing full dates (e.g. "2024-10-15")
+        const dateA = a.date ? new Date(a.date).getTime() : new Date(a.year, 0, 1).getTime();
+        const dateB = b.date ? new Date(b.date).getTime() : new Date(b.year, 0, 1).getTime();
+        
+        return dateB - dateA;
+    });
+
+    const latestResult = sortedResults[0];
+    
     if (!latestResult) return false;
 
     const attendance = typeof latestResult.attendance === 'number' 
         ? (latestResult.attendance <= 1 ? latestResult.attendance * 100 : latestResult.attendance)
         : 0;
         
+    // Show button if attendance is low (e.g. 0), indicating absence in the latest course
     return attendance < 50;
   }, [profile]);
 
@@ -211,7 +223,7 @@ const SmartGuideSection: React.FC<Omit<ResultDisplayProps, 'onShowCertificate' |
               {showSpecialMessageButton && (
                 <button onClick={onGenerateSpecialMessage} disabled={isLoading} className="w-full md:col-span-2 flex items-center justify-center gap-2 px-4 py-3 bg-rose-500/80 text-white font-semibold rounded-lg hover:bg-rose-600 transition disabled:opacity-50 disabled:cursor-not-allowed">
                     {isSpecialMessageLoading ? <LoadingSpinner /> : <IdCardIcon className="h-5 w-5" />}
-                    <span>رسالة شخصية</span>
+                    <span>رسالة تشجيع خاصة</span>
                 </button>
               )}
           </div>
