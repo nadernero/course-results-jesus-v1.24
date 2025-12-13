@@ -2,18 +2,19 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const handler = async (event) => {
-  // 1. إعداد رؤوس CORS للسماح بالاتصال من أي مكان (حل مشاكل المتصفح)
+  // إعداد رؤوس CORS
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
     "Content-Type": "application/json"
   };
 
-  // معالجة طلبات Preflight (OPTIONS)
+  // معالجة طلبات OPTIONS (Preflight)
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
 
+  // السماح فقط بطلبات POST
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
@@ -21,11 +22,10 @@ export const handler = async (event) => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
     console.error("SERVER ERROR: API Key is missing");
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Configuration Error: API Key is missing on server.' }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server Configuration Error: API Key is missing.' }) };
   }
 
   try {
-    // 2. تحليل الطلب
     const body = JSON.parse(event.body || '{}');
     const contentInput = body.contents;
 
@@ -33,19 +33,16 @@ export const handler = async (event) => {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Bad Request: "contents" is required.' }) };
     }
 
-    // 3. تهيئة العميل
+    // تهيئة العميل
     const ai = new GoogleGenAI({ apiKey });
     
-    // استخدام نموذج gemini-1.5-flash لضمان أقصى درجات الاستقرار والسرعة
-    // (النماذج الأحدث قد تكون غير مستقرة أحياناً وتسبب 502)
+    // استخدام نموذج gemini-1.5-flash لضمان الاستقرار والسرعة
     const modelId = 'gemini-1.5-flash'; 
 
-    // 4. استدعاء النموذج
     const response = await ai.models.generateContent({
       model: modelId,
       contents: contentInput,
       config: {
-        // إعدادات أمان مرنة للسماح بالنصوص الدينية والروحية
         safetySettings: [
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
@@ -55,20 +52,18 @@ export const handler = async (event) => {
       }
     });
 
-    // 5. استخراج النص بحذر شديد
     let text = null;
+    
+    // محاولة استخراج النص بأمان
     try {
         text = response.text;
     } catch (e) {
-        console.warn("Warning: Could not access response.text getter directly.", e);
+        console.warn("Could not get text via property:", e);
     }
 
-    // محاولة بديلة يدوية إذا فشل الـ Getter
-    if (!text && response.candidates && response.candidates.length > 0) {
-        const parts = response.candidates[0].content?.parts;
-        if (parts && parts.length > 0) {
-            text = parts.map(p => p.text).join('');
-        }
+    // محاولة بديلة إذا فشلت الطريقة الأولى
+    if (!text && response.candidates?.[0]?.content?.parts?.[0]?.text) {
+        text = response.candidates[0].content.parts[0].text;
     }
 
     if (!text) {
@@ -79,7 +74,6 @@ export const handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'AI returned an empty response.' }) };
     }
 
-    // 6. إرجاع النتيجة بنجاح
     return {
       statusCode: 200,
       headers,
@@ -88,13 +82,12 @@ export const handler = async (event) => {
 
   } catch (error) {
     console.error('Gemini Handler Error:', error);
-    // إرجاع تفاصيل الخطأ للمساعدة في التصحيح
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
-          error: 'حدث خطأ أثناء الاتصال بالخادم.', 
-          details: error.message || error.toString() 
+          error: 'حدث خطأ أثناء معالجة الطلب في السيرفر.', 
+          details: error.message 
       }),
     };
   }
